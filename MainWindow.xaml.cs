@@ -26,7 +26,7 @@ namespace QuestionnaireMultiagent
 
         private async void AskButton_Click(object sender, RoutedEventArgs e)
         {
-            await multiAgent.askQuestion();
+            await multiAgent!.askQuestion();
         }
     }
 }

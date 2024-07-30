@@ -1,0 +1,13 @@
+{
+  "profiles": {
+    "QuestionnaireMultiagent": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "AZURE_OPENAI_MODEL_DEPLOYMENT": "gpt-4o",
+        "AZURE_OPENAI_ENDPOINT": "https://openaibarteastus2.openai.azure.com/",
+        "AZURE_OPENAI_API_KEY": "0f932fa37d924f21830840bcd287ae89",
+        "BING_API_KEY": "0140b5e3604a439fb00c8d48b0f98407"
+      }
+    }
+  }
+}

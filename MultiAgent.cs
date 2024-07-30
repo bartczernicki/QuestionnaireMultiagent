@@ -1,23 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.ComponentModel;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Agents;
-using Microsoft.SemanticKernel.Agents.OpenAI;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
-using Microsoft.SemanticKernel.Agents.Chat;
 using Microsoft.SemanticKernel.Plugins.Web;
 using Microsoft.SemanticKernel.Plugins.Web.Bing;
-using System.Net;
-using System.Threading;
-using Microsoft.Extensions.DependencyInjection;
-using System.Windows.Controls;
+using QuestionnaireMultiagent.Filters;
+using Serilog;
+using System.ComponentModel;
 using System.Windows.Documents;
-using System.Reflection.Metadata;
 using System.Windows.Media;
 
 #pragma warning disable SKEXP0110, SKEXP0001, SKEXP0050, CS8600, CS8604
@@ -26,12 +17,48 @@ namespace QuestionnaireMultiagent
 {
     class MultiAgent : INotifyPropertyChanged
     {
-        MainWindow? mainWindow;
-
         string? DEPLOYMENT_NAME = Environment.GetEnvironmentVariable("AZURE_OPENAI_MODEL_DEPLOYMENT");
         string? ENDPOINT = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT");
         string? API_KEY = Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY");
         string? BING_API_KEY = Environment.GetEnvironmentVariable("BING_API_KEY");
+
+        IKernelBuilder kernelBuilder;
+        Kernel semanticKernel;
+
+        MainWindow? mainWindow;
+        public MultiAgent(MainWindow mainWindow)
+        {
+            this.mainWindow = mainWindow;
+
+            // Create Semantic Kernel
+            kernelBuilder = Kernel.CreateBuilder();
+            kernelBuilder.Services.AddSingleton<IFunctionInvocationFilter, SearchFunctionFilter>();
+            kernelBuilder.Services.AddSingleton<IAutoFunctionInvocationFilter>(new AutoFunctionInvocationFilter());
+
+            // Use Seri Log for logging and Sinks (files)
+            var seriLoggerSemanticKernel = new LoggerConfiguration()
+                .Enrich.WithThreadId()
+                .MinimumLevel.Verbose()
+                .WriteTo.File("SeriLog-SemanticKernel.log")
+                .CreateLogger();
+            
+            // Semantic Kernel logging will be written to the SeriLog-SemanticKernel.log file
+            kernelBuilder.Services.AddLogging(configure => configure
+                .AddSerilog(seriLoggerSemanticKernel)
+               );
+
+            this.semanticKernel = kernelBuilder.AddAzureOpenAIChatCompletion(
+                deploymentName: DEPLOYMENT_NAME,
+                endpoint: ENDPOINT,
+                apiKey: API_KEY)
+            .Build();
+
+            // Add Bing Connector (web search)
+            BingConnector bingConnector = new BingConnector(BING_API_KEY);
+            semanticKernel.ImportPluginFromObject(new WebSearchEnginePlugin(bingConnector), "bing");
+
+            updatePrompts();
+        }
 
         private string _Context = "Microsoft Azure AI";
         public string Context
@@ -48,13 +75,6 @@ namespace QuestionnaireMultiagent
             }
         }
 
-        public event PropertyChangedEventHandler? PropertyChanged;
-
-        protected virtual void OnPropertyChanged(string propertyName)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
-
         private string _Question = "Does your service offer video generative AI?";
         public string Question
         {
@@ -69,41 +89,30 @@ namespace QuestionnaireMultiagent
             }
         }
 
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        protected virtual void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
         string? QuestionAnswererPrompt;
         string? AnswerCheckerPrompt;
         string? LinkCheckerPrompt;
         string? ManagerPrompt;
-        public MultiAgent(MainWindow mainWindow)
-        {
-            this.mainWindow = mainWindow;
-            updatePrompts();
-        }
 
         public async Task askQuestion()
         {
             //AgentResponse = "Agents running...\n";
             //Remove all the text in mainWindow.ResponseBox
-            mainWindow.ResponseBox.Document.Blocks.Clear();
-
-            var builder = Kernel.CreateBuilder();
-            builder.Services.AddSingleton<IFunctionInvocationFilter, SearchFunctionFilter>();
-
-            Kernel kernel = builder.AddAzureOpenAIChatCompletion(
-                            deploymentName: DEPLOYMENT_NAME,
-                            endpoint: ENDPOINT,
-                            apiKey: API_KEY)
-                        .Build();
-
-            BingConnector bing = new BingConnector(BING_API_KEY);
-
-            kernel.ImportPluginFromObject(new WebSearchEnginePlugin(bing), "bing");
-
+            mainWindow!.ResponseBox.Document.Blocks.Clear();
+            
             ChatCompletionAgent QuestionAnswererAgent =
                 new()
                 {
                     Instructions = QuestionAnswererPrompt,
                     Name = "QuestionAnswererAgent",
-                    Kernel = kernel,
+                    Kernel = this.semanticKernel,
                     ExecutionSettings = new OpenAIPromptExecutionSettings
                     {
                         ToolCallBehavior = ToolCallBehavior.AutoInvokeKernelFunctions
@@ -115,7 +124,7 @@ namespace QuestionnaireMultiagent
                 {
                     Instructions = AnswerCheckerPrompt,
                     Name = "AnswerCheckerAgent",
-                    Kernel = kernel,
+                    Kernel = this.semanticKernel,
                     ExecutionSettings = new OpenAIPromptExecutionSettings
                     {
                         ToolCallBehavior = ToolCallBehavior.AutoInvokeKernelFunctions
@@ -127,7 +136,7 @@ namespace QuestionnaireMultiagent
                 {
                     Instructions = LinkCheckerPrompt,
                     Name = "LinkCheckerAgent",
-                    Kernel = kernel
+                    Kernel = this.semanticKernel
                 };
 
             ChatCompletionAgent ManagerAgent =
@@ -135,7 +144,7 @@ namespace QuestionnaireMultiagent
                 {
                     Instructions = ManagerPrompt,
                     Name = "ManagerAgent",
-                    Kernel = kernel
+                    Kernel = this.semanticKernel
                 };
 
             AgentGroupChat chat =
@@ -231,7 +240,7 @@ namespace QuestionnaireMultiagent
             paragraph.Inlines.Add(bold);
             Run run = new Run(response);
             paragraph.Inlines.Add(run);
-            mainWindow.ResponseBox.Document.Blocks.Add(paragraph);
+            mainWindow!.ResponseBox.Document.Blocks.Add(paragraph);
         }
     }
 }
