@@ -12,6 +12,9 @@ using System.Threading.Tasks;
 
 namespace QuestionnaireMultiagent.Filters
 {
+    /*
+    https://devblogs.microsoft.com/semantic-kernel/filters-in-semantic-kernel/ 
+    */
     public sealed class AutoFunctionInvocationFilter() : IAutoFunctionInvocationFilter
         {
             public async Task OnAutoFunctionInvocationAsync(AutoFunctionInvocationContext context, Func<AutoFunctionInvocationContext, Task> next)

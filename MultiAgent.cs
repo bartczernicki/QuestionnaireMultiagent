@@ -1,13 +1,19 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Agents;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 using Microsoft.SemanticKernel.Plugins.Web;
 using Microsoft.SemanticKernel.Plugins.Web.Bing;
+using Microsoft.SemanticKernel.Services;
 using QuestionnaireMultiagent.Filters;
+using QuestionnaireMultiagent.Handlers;
 using Serilog;
+using Serilog.Extensions.Logging;
+using Serilog.Formatting.Compact;
 using System.ComponentModel;
+using System.Net.Http;
 using System.Windows.Documents;
 using System.Windows.Media;
 
@@ -41,16 +47,31 @@ namespace QuestionnaireMultiagent
                 .MinimumLevel.Verbose()
                 .WriteTo.File("SeriLog-SemanticKernel.log")
                 .CreateLogger();
-            
-            // Semantic Kernel logging will be written to the SeriLog-SemanticKernel.log file
+
+            var seriLoggerSemanticKernelHttpClient = new LoggerConfiguration()
+                .Enrich.WithThreadId()
+                .MinimumLevel.Verbose()
+                // Can be tuned: https://stackoverflow.com/questions/70609720/reducing-httpclient-log-verbosity
+                .WriteTo.File("SeriLog-SemanticKernel-HttpClient.log")
+                .CreateLogger();
+
+            // Semantic Kernel logs will be written to the SeriLog-SemanticKernel.log file
             kernelBuilder.Services.AddLogging(configure => configure
                 .AddSerilog(seriLoggerSemanticKernel)
                );
 
+            // HttpClient logs will be written to the SeriLog-SemanticKernel-HttpClient.log file
+            var httpClientLogger = new SerilogLoggerFactory(seriLoggerSemanticKernelHttpClient)
+                .CreateLogger<SemanticKernelMessageHandler>();
+            var semanticKernelMessageHandler = new SemanticKernelMessageHandler(httpClientLogger);
+            var httpClient = new HttpClient(semanticKernelMessageHandler);
+
             this.semanticKernel = kernelBuilder.AddAzureOpenAIChatCompletion(
                 deploymentName: DEPLOYMENT_NAME,
                 endpoint: ENDPOINT,
-                apiKey: API_KEY)
+                apiKey: API_KEY,
+                httpClient: httpClient
+                )
             .Build();
 
             // Add Bing Connector (web search)
