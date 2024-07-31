@@ -9,7 +9,10 @@ using System.Threading.Tasks;
 
 namespace QuestionnaireMultiagent.Handlers
 {
-    // https://learn.microsoft.com/en-us/aspnet/web-api/overview/advanced/http-message-handlers  
+    /*
+    https://learn.microsoft.com/en-us/aspnet/web-api/overview/advanced/http-message-handlers
+    https://stackoverflow.com/questions/42130393/does-net-core-httpclient-have-the-concept-of-interceptors 
+    */
 
     public class SemanticKernelMessageHandler : DelegatingHandler
     {
@@ -23,19 +26,36 @@ namespace QuestionnaireMultiagent.Handlers
         protected async override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            this.logger.LogInformation("Start Request At: {Now}", DateTime.Now);
+            var startMessage = $"""
+
+                --------------------------------
+                Start Request At: {DateTime.Now}
+                """;
+            this.logger.LogInformation(startMessage);
 
 
             // Show request body
             if (request.Content != null)
             {
                 var requestContent = await request.Content.ReadAsStringAsync();
-                this.logger.LogInformation("BODY: {requestContent}", requestContent);
+
+                var bodyMessage = $"""
+                    BODY:
+                    {requestContent}
+                    """;
+
+                this.logger.LogInformation(bodyMessage);
             }
 
             // Call the inner handler.
             var response = await base.SendAsync(request, cancellationToken);
-            this.logger.LogInformation("End Request at: {Now}", DateTime.Now);
+
+            var endMessage = $"""
+                End Request At: {DateTime.Now}
+                ------------------------------
+
+                """;
+            this.logger.LogInformation(endMessage);
 
             return response;
         }

@@ -126,7 +126,7 @@ namespace QuestionnaireMultiagent
         {
             //AgentResponse = "Agents running...\n";
             //Remove all the text in mainWindow.ResponseBox
-            mainWindow!.ResponseBox.Document.Blocks.Clear();
+            mainWindow!.txtAgentsResponse.Document.Blocks.Clear();
             
             ChatCompletionAgent QuestionAnswererAgent =
                 new()
@@ -261,7 +261,7 @@ namespace QuestionnaireMultiagent
             paragraph.Inlines.Add(bold);
             Run run = new Run(response);
             paragraph.Inlines.Add(run);
-            mainWindow!.ResponseBox.Document.Blocks.Add(paragraph);
+            mainWindow!.txtAgentsResponse.Document.Blocks.Add(paragraph);
         }
     }
 }
